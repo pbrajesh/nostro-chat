@@ -24,9 +24,14 @@ secp256k1 key pair that lives on the phone.
 - **Discoverability:** on unlock the app publishes your username (kind 0) and the relays
   you read messages from (kind 10050).
 
-Messages are not stored on the phone. Each time you unlock, the app downloads and
-decrypts them again from the relays, so very old messages may disappear if relays drop
-them. The app only sends to its own four relays; it doesn't yet look up a contact's
+- **Saved messages:** messages are stored in a SQLCipher (AES-256) database on the phone.
+  Its key is derived from your private key, which only the PIN unlocks, so the database
+  can't be read without the PIN.
+- **Auto-delete:** Settings → "Delete messages after" 1 day, 10 days, or never (default).
+  Expired messages are removed when you unlock and every 10 minutes while the app is open,
+  and ignored if a relay sends them again.
+
+The app only sends to its own four relays; it doesn't yet look up a contact's
 preferred relays.
 
 ### About the PIN

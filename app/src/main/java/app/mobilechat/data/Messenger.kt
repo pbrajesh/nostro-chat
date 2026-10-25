@@ -4,6 +4,7 @@ import app.mobilechat.core.DirectMessage
 import app.mobilechat.core.Event
 import app.mobilechat.core.Nip17
 import app.mobilechat.core.RelayPool
+import app.mobilechat.core.Retention
 import app.mobilechat.core.hexToBytes
 import app.mobilechat.core.toHex
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,10 +16,16 @@ import java.util.concurrent.ConcurrentHashMap
 data class RelayStatus(val connected: Int, val total: Int)
 
 /**
- * Sends and receives NIP-17 direct messages through public relays. Messages are
- * kept in memory only; on each unlock they are downloaded and decrypted again.
+ * Sends and receives NIP-17 direct messages through public relays and keeps them in
+ * the encrypted [store]. Messages older than the [retention] cutoff are deleted and,
+ * if relays send them again, ignored.
  */
-class Messenger(private val identity: Identity, relays: List<String> = RelayPool.DEFAULT_RELAYS) {
+class Messenger(
+    private val identity: Identity,
+    private val store: MessageStore,
+    private val retention: () -> Retention,
+    relays: List<String> = RelayPool.DEFAULT_RELAYS,
+) {
     private val myHex = identity.publicKey.toHex()
 
     private val _conversations = MutableStateFlow<Map<String, List<DirectMessage>>>(emptyMap())
@@ -55,12 +62,27 @@ class Messenger(private val identity: Identity, relays: List<String> = RelayPool
     )
 
     fun start() {
+        prune()
+        _conversations.value = store.all().groupBy { it.peer }
         pool.start()
         pool.subscribe("dms", """{"kinds":[${Nip17.KIND_GIFT_WRAP}],"#p":["$myHex"],"limit":1000}""")
         publishProfile(relays = RelayPool.DEFAULT_RELAYS)
     }
 
-    fun stop() = pool.stop()
+    fun stop() {
+        pool.stop()
+        store.close()
+    }
+
+    /** Applies the retention setting to the database and the open conversations. */
+    fun prune() {
+        val cutoff = retention().cutoff(now()) ?: return
+        runCatching { store.deleteOlderThan(cutoff) }
+        _conversations.update { all ->
+            all.mapValues { (_, messages) -> messages.filter { it.createdAt >= cutoff } }
+                .filterValues { it.isNotEmpty() }
+        }
+    }
 
     fun send(peerHex: String, text: String) {
         val (toPeer, toMe) = Nip17.wrapMessage(identity.privateKey, peerHex.hexToBytes(), text, now())
@@ -84,6 +106,10 @@ class Messenger(private val identity: Identity, relays: List<String> = RelayPool
     }
 
     private fun add(message: DirectMessage) {
+        val cutoff = retention().cutoff(now())
+        if (cutoff != null && message.createdAt < cutoff) return
+        // The store may already be closed if an event lands while the app is locking.
+        runCatching { store.insert(message) }
         _conversations.update { all ->
             val existing = all[message.peer].orEmpty()
             if (existing.any { it.id == message.id }) all

@@ -70,3 +70,22 @@ class CoreTest {
         assertTrue(Regex("[a-z]+_[a-z]+").matches(name), name)
     }
 }
+
+class LocalStorageTest {
+    @Test fun retentionCutoffs() {
+        val now = 1_700_000_000L
+        assertEquals(now - 86_400, Retention.ONE_DAY.cutoff(now))
+        assertEquals(now - 864_000, Retention.TEN_DAYS.cutoff(now))
+        assertNull(Retention.NEVER.cutoff(now))
+        assertEquals(Retention.NEVER, Retention.fromName(null))
+        assertEquals(Retention.TEN_DAYS, Retention.fromName("TEN_DAYS"))
+    }
+
+    @Test fun databaseKeyIsStablePerIdentity() {
+        val a = NostrKeys.generatePrivateKey()
+        val b = NostrKeys.generatePrivateKey()
+        assertEquals(32, LocalKeys.databaseKey(a).size)
+        assertEquals(LocalKeys.databaseKey(a).toHex(), LocalKeys.databaseKey(a.copyOf()).toHex())
+        assertTrue(LocalKeys.databaseKey(a).toHex() != LocalKeys.databaseKey(b).toHex())
+    }
+}
