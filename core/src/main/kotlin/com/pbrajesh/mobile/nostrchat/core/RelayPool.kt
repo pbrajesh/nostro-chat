@@ -13,9 +13,10 @@ import java.util.concurrent.TimeUnit
 /**
  * Keeps WebSocket connections to a set of Nostr relays (NIP-01), resends
  * subscriptions after reconnects, and answers NIP-42 AUTH challenges.
+ * Relays can be added while running, for example ones found through NIP-66.
  */
 class RelayPool(
-    private val urls: List<String>,
+    urls: Collection<String>,
     private val listener: Listener,
     /** Signs a NIP-42 auth event (kind 22242) for the given relay and challenge. */
     private val authSigner: (relay: String, challenge: String) -> Event,
@@ -25,12 +26,34 @@ class RelayPool(
         fun onEvent(relay: String, subscriptionId: String, event: Event)
         fun onPublished(relay: String, eventId: String, accepted: Boolean, message: String) {}
         fun onConnectionsChanged(connected: Int, total: Int) {}
+        fun onEndOfStoredEvents(relay: String, subscriptionId: String) {}
     }
 
     private val subscriptions = ConcurrentHashMap<String, String>() // id -> filter JSON
-    private val relays = urls.associateWith { Relay(it) }
+    private val relays = ConcurrentHashMap<String, Relay>()
     private val scheduler = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "relay-pool").apply { isDaemon = true } }
     @Volatile private var running = false
+
+    init {
+        addRelays(urls)
+    }
+
+    /** Connects to any of [urls] not already in the pool. Returns the normalized URLs. */
+    fun addRelays(urls: Collection<String>): List<String> {
+        val normalized = urls.mapNotNull(RelayLists::normalize).distinct()
+        var added = false
+        for (url in normalized) {
+            val relay = Relay(url)
+            if (relays.putIfAbsent(url, relay) == null) {
+                added = true
+                if (running) relay.connect()
+            }
+        }
+        if (added) notifyConnections()
+        return normalized
+    }
+
+    fun urls(): Set<String> = relays.keys.toSet()
 
     fun start() {
         running = true
@@ -49,8 +72,18 @@ class RelayPool(
         relays.values.forEach { it.sendReq(id, filterJson) }
     }
 
-    fun publish(event: Event) {
-        relays.values.forEach { it.publish(event) }
+    /** Stops a subscription on every relay. */
+    fun unsubscribe(id: String) {
+        if (subscriptions.remove(id) != null) relays.values.forEach { it.sendClose(id) }
+    }
+
+    /** Sends to every relay in the pool, or only to [to] (adding those relays if needed). */
+    fun publish(event: Event, to: Collection<String>? = null) {
+        if (to == null) {
+            relays.values.forEach { it.publish(event) }
+        } else {
+            addRelays(to).forEach { relays[it]?.publish(event) }
+        }
     }
 
     fun connectedCount() = relays.values.count { it.connected }
@@ -77,6 +110,10 @@ class RelayPool(
 
         fun sendReq(id: String, filter: String) {
             if (connected) socket?.send("[\"REQ\",${Event.quote(id)},$filter]")
+        }
+
+        fun sendClose(id: String) {
+            if (connected) socket?.send("[\"CLOSE\",${Event.quote(id)}]")
         }
 
         fun publish(event: Event) {
@@ -112,6 +149,7 @@ class RelayPool(
                         listener.onPublished(url, id, msg.optBoolean(2), msg.optString(3))
                     }
                 }
+                "EOSE" -> listener.onEndOfStoredEvents(url, msg.optString(1))
                 "AUTH" -> {
                     val auth = authSigner(url, msg.optString(1))
                     authEventIds += auth.id
