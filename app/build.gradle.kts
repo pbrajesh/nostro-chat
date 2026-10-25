@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "app.mobilechat"
+    namespace = "com.pbrajesh.mobile.nostrchat"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.mobilechat"
+        applicationId = "com.pbrajesh.mobile.nostrchat"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

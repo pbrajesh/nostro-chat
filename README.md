@@ -52,9 +52,11 @@ build installs over the previous one without wiping your keys.
 
 ## Layout
 
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams.
+
 - `core/` — plain Kotlin: bech32/npub, key generation, PIN encryption, usernames,
   NIP-44, NIP-17 gift wraps, relay connections. Unit tests run on the JVM:
   `./gradlew :core:test` (NIP-44 is checked against the official test vectors). CI also
   sends a real message between two throwaway keys over the public relays.
-- `app/` — the Android app: Keystore wrapper, storage, Compose screens, QR scanning
+- `app/` — the Android app (`com.pbrajesh.mobile.nostrchat`): Keystore wrapper, storage, Compose screens, QR scanning
   (ZXing).
