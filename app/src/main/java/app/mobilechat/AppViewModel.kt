@@ -9,6 +9,7 @@ import app.mobilechat.data.Contact
 import app.mobilechat.data.ContactStore
 import app.mobilechat.data.Identity
 import app.mobilechat.data.KeyVault
+import app.mobilechat.data.Messenger
 import app.mobilechat.data.UnlockResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +22,7 @@ import kotlinx.coroutines.withContext
 sealed interface Screen {
     data object Setup : Screen
     data object Unlock : Screen
-    data class Home(val identity: Identity) : Screen
+    data class Home(val identity: Identity, val messenger: Messenger) : Screen
 }
 
 data class UiState(
@@ -68,8 +69,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun lock() {
-        (_state.value.screen as? Screen.Home)?.identity?.privateKey?.fill(0)
+        (_state.value.screen as? Screen.Home)?.let {
+            it.messenger.stop()
+            it.identity.privateKey.fill(0)
+        }
         _state.value = UiState(screen = Screen.Unlock)
+    }
+
+    fun sendMessage(peerHex: String, text: String) {
+        val home = _state.value.screen as? Screen.Home ?: return
+        if (text.isBlank()) return
+        viewModelScope.launch(Dispatchers.Default) { home.messenger.send(peerHex, text.trim()) }
+    }
+
+    override fun onCleared() {
+        (_state.value.screen as? Screen.Home)?.messenger?.stop()
     }
 
     /** Returns an error message, or null when the contact was added. */
@@ -90,7 +104,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun clearError() = _state.update { it.copy(error = null) }
 
     private fun enterHome(identity: Identity) {
-        _state.value = UiState(screen = Screen.Home(identity), contacts = contactStore.all())
+        val messenger = Messenger(identity).also { it.start() }
+        _state.value = UiState(screen = Screen.Home(identity, messenger), contacts = contactStore.all())
     }
 
     private fun fail(message: String) = _state.update { it.copy(busy = false, error = message) }

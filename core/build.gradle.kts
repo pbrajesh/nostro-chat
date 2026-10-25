@@ -19,6 +19,10 @@ kotlin {
 dependencies {
     api("fr.acinq.secp256k1:secp256k1-kmp:0.24.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.86")
+    api("com.squareup.okhttp3:okhttp:4.12.0")
+    // Android ships org.json; the JVM needs it for compiling and tests.
+    compileOnly("org.json:json:20240303")
+    testImplementation("org.json:json:20240303")
 
     testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")

@@ -16,8 +16,18 @@ secp256k1 key pair that lives on the phone.
 - **Profile:** your npub as text and as a QR code (`nostr:npub1…`, NIP-21), with copy and
   share buttons.
 - **Contacts:** add by scanning a QR code or pasting an npub (or 64-char hex).
+- **Chat:** tap a contact to open a conversation. Messages are NIP-17 private direct
+  messages (NIP-44 encryption inside NIP-59 gift wraps), sent through public relays
+  (`relay.damus.io`, `nos.lol`, `relay.primal.net`, `relay.0xchat.com`). They work with
+  other NIP-17 apps such as 0xchat and Amethyst. People who message you show up in Chats
+  even before you add them.
+- **Discoverability:** on unlock the app publishes your username (kind 0) and the relays
+  you read messages from (kind 10050).
 
-Messaging over relays is not in this version yet.
+Messages are not stored on the phone. Each time you unlock, the app downloads and
+decrypts them again from the relays, so very old messages may disappear if relays drop
+them. The app only sends to its own four relays; it doesn't yet look up a contact's
+preferred relays.
 
 ### About the PIN
 
@@ -37,7 +47,9 @@ build installs over the previous one without wiping your keys.
 
 ## Layout
 
-- `core/` — plain Kotlin: bech32/npub, key generation, PIN encryption, usernames. Unit
-  tests run on the JVM: `./gradlew :core:test`.
+- `core/` — plain Kotlin: bech32/npub, key generation, PIN encryption, usernames,
+  NIP-44, NIP-17 gift wraps, relay connections. Unit tests run on the JVM:
+  `./gradlew :core:test` (NIP-44 is checked against the official test vectors). CI also
+  sends a real message between two throwaway keys over the public relays.
 - `app/` — the Android app: Keystore wrapper, storage, Compose screens, QR scanning
   (ZXing).

@@ -21,6 +21,16 @@ jobs:
       - name: Unit tests and debug APK
         run: ./gradlew --no-daemon :core:test :app:assembleDebug
 
+      # Real relays can be slow or down, so this never blocks the APK.
+      - name: Relay smoke test (sends a real encrypted DM)
+        continue-on-error: true
+        env:
+          RELAY_SMOKE_TEST: "1"
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon :core:test --tests '*LiveRelayTest*' --rerun-tasks -i \
+            | grep -E "conn |got from|wss://|LiveRelayTest|FAILED|BUILD"
+
       - uses: actions/upload-artifact@v4
         with:
           name: nostr-chat-debug-apk

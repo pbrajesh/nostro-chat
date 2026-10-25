@@ -40,7 +40,9 @@ class MainActivity : ComponentActivity() {
                     )
                     is Screen.Home -> HomeScreen(
                         identity = screen.identity,
+                        messenger = screen.messenger,
                         contacts = state.contacts,
+                        onSend = viewModel::sendMessage,
                         onAddContact = viewModel::addContact,
                         onRemoveContact = viewModel::removeContact,
                         onLock = viewModel::lock,
