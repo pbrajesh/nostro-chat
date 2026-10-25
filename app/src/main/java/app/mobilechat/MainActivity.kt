@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 val state by viewModel.state.collectAsStateWithLifecycle()
+                val retention by viewModel.retention.collectAsStateWithLifecycle()
                 when (val screen = state.screen) {
                     Screen.Setup -> PinScreen(
                         creating = true,
@@ -43,6 +44,8 @@ class MainActivity : ComponentActivity() {
                         messenger = screen.messenger,
                         contacts = state.contacts,
                         onSend = viewModel::sendMessage,
+                        retention = retention,
+                        onRetentionChange = viewModel::setRetention,
                         onAddContact = viewModel::addContact,
                         onRemoveContact = viewModel::removeContact,
                         onLock = viewModel::lock,

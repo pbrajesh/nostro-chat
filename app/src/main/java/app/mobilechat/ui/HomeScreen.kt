@@ -8,6 +8,9 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.material3.RadioButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import app.mobilechat.core.DirectMessage
 import app.mobilechat.core.NostrKeys
+import app.mobilechat.core.Retention
 import app.mobilechat.core.Usernames
 import app.mobilechat.core.hexToBytes
 import app.mobilechat.data.Messenger
@@ -73,6 +77,8 @@ fun HomeScreen(
     messenger: Messenger,
     contacts: List<Contact>,
     onSend: (peerHex: String, text: String) -> Unit,
+    retention: Retention,
+    onRetentionChange: (Retention) -> Unit,
     onAddContact: (key: String, name: String) -> String?,
     onRemoveContact: (Contact) -> Unit,
     onLock: () -> Unit,
@@ -104,7 +110,7 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (tab == 0) "Chats" else "My profile") },
+                title = { Text(listOf("Chats", "My profile", "Settings")[tab]) },
                 actions = { TextButton(onClick = onLock) { Text("Lock") } },
             )
         },
@@ -112,6 +118,7 @@ fun HomeScreen(
             NavigationBar {
                 NavigationBarItem(selected = tab == 0, onClick = { tab = 0 }, icon = {}, label = { Text("Chats") })
                 NavigationBarItem(selected = tab == 1, onClick = { tab = 1 }, icon = {}, label = { Text("Profile") })
+                NavigationBarItem(selected = tab == 2, onClick = { tab = 2 }, icon = {}, label = { Text("Settings") })
             }
         },
         floatingActionButton = {
@@ -123,16 +130,48 @@ fun HomeScreen(
         },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            if (tab == 0) {
-                ChatsTab(contacts, conversations, status, onOpen = { openChat = it })
-            } else {
-                ProfileTab(identity)
+            when (tab) {
+                0 -> ChatsTab(contacts, conversations, status, onOpen = { openChat = it })
+                1 -> ProfileTab(identity)
+                else -> SettingsTab(retention, onRetentionChange)
             }
         }
     }
 
     if (adding) {
         AddContactDialog(onAdd = onAddContact, onDismiss = { adding = false })
+    }
+}
+
+@Composable
+private fun SettingsTab(retention: Retention, onChange: (Retention) -> Unit) {
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
+        Text(
+            "Delete messages after",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        Retention.entries.forEach { option ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .selectable(selected = option == retention, onClick = { onChange(option) }, role = Role.RadioButton)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = option == retention, onClick = null)
+                Text(option.label, modifier = Modifier.padding(start = 16.dp))
+            }
+        }
+        Text(
+            "Messages are saved in an encrypted database on this phone that only your PIN " +
+                "can unlock. Old messages are deleted from the phone when you unlock the app " +
+                "and while it's open. Relays may keep their encrypted copies, which only you " +
+                "and the other person can read.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(16.dp),
+        )
     }
 }
 

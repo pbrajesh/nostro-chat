@@ -4,12 +4,19 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.mobilechat.core.NostrKeys
+import app.mobilechat.core.LocalKeys
 import app.mobilechat.core.Pin
+import app.mobilechat.core.Retention
 import app.mobilechat.data.Contact
 import app.mobilechat.data.ContactStore
 import app.mobilechat.data.Identity
 import app.mobilechat.data.KeyVault
+import app.mobilechat.data.MessageStore
 import app.mobilechat.data.Messenger
+import app.mobilechat.data.Settings
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import app.mobilechat.data.UnlockResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +42,11 @@ data class UiState(
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val vault = KeyVault(app)
     private val contactStore = ContactStore(app)
+    private val settings = Settings(app)
+    private var pruneJob: Job? = null
+
+    private val _retention = MutableStateFlow(settings.retention)
+    val retention: StateFlow<Retention> = _retention.asStateFlow()
 
     private val _state = MutableStateFlow(
         UiState(screen = if (vault.hasIdentity()) Screen.Unlock else Screen.Setup)
@@ -47,8 +59,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             pin != confirm -> return fail("The two PINs don't match.")
         }
         runBusy {
-            val identity = withContext(Dispatchers.Default) { vault.create(pin.toCharArray()) }
-            enterHome(identity)
+            enterHome(withContext(Dispatchers.Default) { vault.create(pin.toCharArray()) })
         }
     }
 
@@ -69,6 +80,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun lock() {
+        pruneJob?.cancel()
         (_state.value.screen as? Screen.Home)?.let {
             it.messenger.stop()
             it.identity.privateKey.fill(0)
@@ -80,6 +92,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val home = _state.value.screen as? Screen.Home ?: return
         if (text.isBlank()) return
         viewModelScope.launch(Dispatchers.Default) { home.messenger.send(peerHex, text.trim()) }
+    }
+
+    fun setRetention(value: Retention) {
+        settings.retention = value
+        _retention.value = value
+        val home = _state.value.screen as? Screen.Home ?: return
+        viewModelScope.launch(Dispatchers.IO) { home.messenger.prune() }
     }
 
     override fun onCleared() {
@@ -103,9 +122,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearError() = _state.update { it.copy(error = null) }
 
-    private fun enterHome(identity: Identity) {
-        val messenger = Messenger(identity).also { it.start() }
+    private suspend fun enterHome(identity: Identity) {
+        val app = getApplication<Application>()
+        val messenger = withContext(Dispatchers.IO) {
+            val store = MessageStore.open(app, LocalKeys.databaseKey(identity.privateKey))
+            Messenger(identity, store, retention = { settings.retention }).also { it.start() }
+        }
         _state.value = UiState(screen = Screen.Home(identity, messenger), contacts = contactStore.all())
+        // Old messages also expire while the app stays open.
+        pruneJob = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(10 * 60 * 1000L)
+                messenger.prune()
+            }
+        }
     }
 
     private fun fail(message: String) = _state.update { it.copy(busy = false, error = message) }
