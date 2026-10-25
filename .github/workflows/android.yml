@@ -28,8 +28,8 @@ jobs:
           RELAY_SMOKE_TEST: "1"
         run: |
           set -o pipefail
-          ./gradlew --no-daemon :core:test --tests '*LiveRelayTest*' --rerun-tasks -i \
-            | grep -E "conn |got from|wss://|LiveRelayTest|FAILED|BUILD"
+          ./gradlew --no-daemon :core:test --tests '*Live*' --rerun-tasks -i \
+            | grep -E "conn |got from|wss://|reports from|monitors:|picked|Live|FAILED|BUILD"
 
       - uses: actions/upload-artifact@v4
         with:

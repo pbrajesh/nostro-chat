@@ -22,6 +22,7 @@ flowchart TB
             store["MessageStore<br/>SQLCipher DB"]
             contacts["ContactStore"]
             settings["Settings<br/>auto-delete"]
+            reldir["RelayDirectory<br/>discovered relays,<br/>contacts' inbox relays"]
         end
 
         subgraph core["core (plain Kotlin, unit tested on the JVM)"]
@@ -30,6 +31,7 @@ flowchart TB
             names["Usernames<br/>adjective_animal"]
             nip17["Nip17 · Nip44 · Event<br/>gift wrap, encryption, signing"]
             pool["RelayPool<br/>WebSockets, NIP-42 auth"]
+            nip66["Nip66 · RelayLists<br/>relay discovery"]
             dbkey["LocalKeys<br/>DB key from private key"]
         end
 
@@ -37,7 +39,7 @@ flowchart TB
         dbfile[("messages.db<br/>encrypted")]
     end
 
-    relays(["Public Nostr relays<br/>damus · nos.lol · primal · 0xchat"])
+    relays(["Public Nostr relays<br/>inbox: damus · nos.lol · primal · 0xchat<br/>+ fastest from NIP-66 monitors<br/>+ each contact's inbox relays"])
     others(["Other Nostr apps<br/>0xchat, Amethyst, …"])
 
     pin --> vm
@@ -60,10 +62,16 @@ flowchart TB
     store --> dbfile
     messenger --> nip17
     messenger --> pool
+    messenger --> nip66
+    messenger --> reldir
+    reldir --> prefs
     home --> names
     pool <== "encrypted gift wraps (kind 1059)" ==> relays
     relays <==> others
 ```
+
+Messages only reach the screens through the database: `Messenger` writes every message it
+receives or sends to `MessageStore`, then reloads the conversations from it.
 
 ## How the private key is protected
 
