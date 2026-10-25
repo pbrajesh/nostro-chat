@@ -80,7 +80,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 
     // Encrypted SQLite for stored messages.
-    implementation("net.zetetic:sqlcipher-android:4.19.1@aar")
+    implementation("net.zetetic:sqlcipher-android:4.17.0@aar")
     implementation("androidx.sqlite:sqlite:2.4.0")
 
     // QR generation (core) and the camera scanner screen (embedded).

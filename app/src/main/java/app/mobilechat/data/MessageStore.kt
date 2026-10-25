@@ -15,7 +15,7 @@ import java.io.Closeable
 class MessageStore private constructor(private val db: SQLiteDatabase) : Closeable {
 
     fun all(): List<DirectMessage> =
-        db.rawQuery("SELECT id, peer, from_me, text, created_at FROM messages ORDER BY created_at", null).use { c ->
+        db.rawQuery("SELECT id, peer, from_me, text, created_at FROM messages ORDER BY created_at", emptyArray<String>()).use { c ->
             buildList {
                 while (c.moveToNext()) {
                     add(DirectMessage(c.getString(0), c.getString(1), c.getInt(2) == 1, c.getString(3), c.getLong(4)))
