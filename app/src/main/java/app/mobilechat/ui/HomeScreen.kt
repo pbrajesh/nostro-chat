@@ -5,7 +5,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,7 +54,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
+import app.mobilechat.core.DirectMessage
 import app.mobilechat.core.NostrKeys
+import app.mobilechat.core.Usernames
+import app.mobilechat.core.hexToBytes
+import app.mobilechat.data.Messenger
+import app.mobilechat.data.RelayStatus
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.mobilechat.data.Contact
 import app.mobilechat.data.Identity
 import com.journeyapps.barcodescanner.ScanContract
@@ -62,29 +70,52 @@ import com.journeyapps.barcodescanner.ScanOptions
 @Composable
 fun HomeScreen(
     identity: Identity,
+    messenger: Messenger,
     contacts: List<Contact>,
+    onSend: (peerHex: String, text: String) -> Unit,
     onAddContact: (key: String, name: String) -> String?,
     onRemoveContact: (Contact) -> Unit,
     onLock: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(0) }
     var adding by rememberSaveable { mutableStateOf(false) }
+    var openChat by rememberSaveable { mutableStateOf<String?>(null) }
+    val conversations by messenger.conversations.collectAsStateWithLifecycle()
+    val pending by messenger.pending.collectAsStateWithLifecycle()
+    val status by messenger.status.collectAsStateWithLifecycle()
+
+    val peer = openChat
+    if (peer != null) {
+        BackHandler { openChat = null }
+        val contact = contacts.firstOrNull { it.publicKeyHex == peer }
+        ChatScreen(
+            peerName = contact?.name ?: Usernames.forPublicKey(peer.hexToBytes()),
+            isContact = contact != null,
+            messages = conversations[peer].orEmpty(),
+            pending = pending,
+            onSend = { onSend(peer, it) },
+            onAddContact = { onAddContact(peer, "") },
+            onRemoveContact = { contact?.let(onRemoveContact); openChat = null },
+            onBack = { openChat = null },
+        )
+        return
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (tab == 0) "My profile" else "Contacts") },
+                title = { Text(if (tab == 0) "Chats" else "My profile") },
                 actions = { TextButton(onClick = onLock) { Text("Lock") } },
             )
         },
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(selected = tab == 0, onClick = { tab = 0 }, icon = {}, label = { Text("Profile") })
-                NavigationBarItem(selected = tab == 1, onClick = { tab = 1 }, icon = {}, label = { Text("Contacts") })
+                NavigationBarItem(selected = tab == 0, onClick = { tab = 0 }, icon = {}, label = { Text("Chats") })
+                NavigationBarItem(selected = tab == 1, onClick = { tab = 1 }, icon = {}, label = { Text("Profile") })
             }
         },
         floatingActionButton = {
-            if (tab == 1) {
+            if (tab == 0) {
                 FloatingActionButton(onClick = { adding = true }) {
                     Icon(Icons.Filled.Add, contentDescription = "Add contact")
                 }
@@ -92,7 +123,11 @@ fun HomeScreen(
         },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            if (tab == 0) ProfileTab(identity) else ContactsTab(contacts, onRemoveContact)
+            if (tab == 0) {
+                ChatsTab(contacts, conversations, status, onOpen = { openChat = it })
+            } else {
+                ProfileTab(identity)
+            }
         }
     }
 
@@ -131,37 +166,62 @@ private fun ProfileTab(identity: Identity) {
     }
 }
 
+private data class ChatRow(val peerHex: String, val name: String, val isContact: Boolean, val last: DirectMessage?)
+
 @Composable
-private fun ContactsTab(contacts: List<Contact>, onRemove: (Contact) -> Unit) {
-    if (contacts.isEmpty()) {
-        Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-            Text(
-                "No contacts yet. Tap + to scan a friend's QR code or paste their npub.",
-                textAlign = TextAlign.Center,
+private fun ChatsTab(
+    contacts: List<Contact>,
+    conversations: Map<String, List<DirectMessage>>,
+    status: RelayStatus,
+    onOpen: (peerHex: String) -> Unit,
+) {
+    // Contacts plus anyone who has messaged us, most recent conversation first.
+    val rows = remember(contacts, conversations) {
+        val names = contacts.associate { it.publicKeyHex to it.name }
+        (names.keys + conversations.keys).map { peer ->
+            ChatRow(
+                peerHex = peer,
+                name = names[peer] ?: Usernames.forPublicKey(peer.hexToBytes()),
+                isContact = peer in names,
+                last = conversations[peer]?.lastOrNull(),
             )
-        }
-        return
+        }.sortedWith(compareByDescending<ChatRow> { it.last?.createdAt ?: 0 }.thenBy { it.name })
     }
-    var confirmRemove by remember { mutableStateOf<Contact?>(null) }
-    LazyColumn {
-        items(contacts, key = { it.publicKeyHex }) { contact ->
-            ListItem(
-                headlineContent = { Text(contact.name) },
-                supportingContent = {
-                    Text(contact.npub, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                trailingContent = { TextButton(onClick = { confirmRemove = contact }) { Text("Remove") } },
-            )
-            HorizontalDivider()
-        }
-    }
-    confirmRemove?.let { contact ->
-        AlertDialog(
-            onDismissRequest = { confirmRemove = null },
-            title = { Text("Remove ${contact.name}?") },
-            confirmButton = { TextButton(onClick = { onRemove(contact); confirmRemove = null }) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = { confirmRemove = null }) { Text("Cancel") } },
+    Column(Modifier.fillMaxSize()) {
+        Text(
+            if (status.connected == 0) "Connecting to relays…"
+            else "Connected to ${status.connected} of ${status.total} relays",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
+        if (rows.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    "No chats yet. Tap + to scan a friend's QR code or paste their npub.",
+                    textAlign = TextAlign.Center,
+                )
+            }
+        } else LazyColumn {
+            items(rows, key = { it.peerHex }) { row ->
+                ListItem(
+                    headlineContent = { Text(row.name) },
+                    supportingContent = {
+                        Text(
+                            row.last?.let { (if (it.fromMe) "You: " else "") + it.text }
+                                ?: if (row.isContact) "Say hello" else "",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    trailingContent = {
+                        if (!row.isContact) Text("New", color = MaterialTheme.colorScheme.primary)
+                    },
+                    modifier = Modifier.clickable { onOpen(row.peerHex) },
+                )
+                HorizontalDivider()
+            }
+        }
     }
 }
 
