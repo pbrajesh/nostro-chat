@@ -12,6 +12,7 @@ import com.pbrajesh.mobile.nostrchat.data.ContactStore
 import com.pbrajesh.mobile.nostrchat.data.Identity
 import com.pbrajesh.mobile.nostrchat.data.KeyVault
 import com.pbrajesh.mobile.nostrchat.data.MessageStore
+import com.pbrajesh.mobile.nostrchat.data.RelayDirectory
 import com.pbrajesh.mobile.nostrchat.data.Messenger
 import com.pbrajesh.mobile.nostrchat.data.Settings
 import kotlinx.coroutines.Job
@@ -43,6 +44,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val vault = KeyVault(app)
     private val contactStore = ContactStore(app)
     private val settings = Settings(app)
+    private val relayDirectory = RelayDirectory(app)
     private var pruneJob: Job? = null
 
     private val _retention = MutableStateFlow(settings.retention)
@@ -112,6 +114,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (me != null && key.contentEquals(me.publicKey)) return "That's your own key."
         contactStore.add(key, name)
         _state.update { it.copy(contacts = contactStore.all()) }
+        (_state.value.screen as? Screen.Home)?.messenger?.refreshContacts()
         return null
     }
 
@@ -126,7 +129,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val app = getApplication<Application>()
         val messenger = withContext(Dispatchers.IO) {
             val store = MessageStore.open(app, LocalKeys.databaseKey(identity.privateKey))
-            Messenger(identity, store, retention = { settings.retention }).also { it.start() }
+            Messenger(
+                identity = identity,
+                store = store,
+                retention = { settings.retention },
+                directory = relayDirectory,
+                contactKeys = { contactStore.all().map { it.publicKeyHex } },
+                parentScope = viewModelScope,
+            ).also { it.start() }
         }
         _state.value = UiState(screen = Screen.Home(identity, messenger), contacts = contactStore.all())
         // Old messages also expire while the app stays open.

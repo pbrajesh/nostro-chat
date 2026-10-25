@@ -44,7 +44,7 @@ object Nip66 {
     /** Monitor reports older than this are ignored. */
     const val MAX_AGE_SECONDS = 24 * 60 * 60L
 
-    data class RelayReport(val url: String, val rttOpenMs: Int?, val seenAt: Long)
+    data class RelayReport(val url: String, val rttOpenMs: Int?, val seenAt: Long, val monitor: String)
 
     fun filter(now: Long): String =
         """{"kinds":[$KIND_RELAY_DISCOVERY],"since":${now - MAX_AGE_SECONDS},"limit":500}"""
@@ -62,19 +62,25 @@ object Nip66 {
         if (network != null && network != "clearnet") return null
         if (url.endsWith(".onion") || url.endsWith(".i2p")) return null
         val rtt = event.tagValues("rtt-open").firstOrNull()?.toIntOrNull()
-        return RelayReport(url, rtt, event.createdAt)
+        return RelayReport(url, rtt, event.createdAt, event.pubkey)
     }
 
     /**
-     * Picks the [count] relays with the fastest recent connection times, skipping any
-     * already in [exclude]. Each relay is judged by its most recent report.
+     * Picks [count] relays, skipping any in [exclude]. Relays that more monitors vouch for
+     * come first, since a relay one far-away monitor happens to see as fast is often a
+     * tiny personal one; ties go to the faster median connection time.
      */
     fun pick(reports: Collection<RelayReport>, now: Long, exclude: Set<String>, count: Int = PICK_COUNT): List<String> =
         reports
             .filter { it.seenAt >= now - MAX_AGE_SECONDS && it.url !in exclude }
             .groupBy { it.url }
-            .map { (_, all) -> all.maxBy { it.seenAt } }
-            .sortedWith(compareBy(nullsLast()) { it.rttOpenMs })
+            .map { (url, all) ->
+                // Each monitor's latest report counts once.
+                val latest = all.groupBy { it.monitor }.map { (_, r) -> r.maxBy { it.seenAt } }
+                val rtts = latest.mapNotNull { it.rttOpenMs }.sorted()
+                Triple(url, latest.size, rtts.getOrNull(rtts.size / 2))
+            }
+            .sortedWith(compareByDescending<Triple<String, Int, Int?>> { it.second }.thenBy(nullsLast()) { it.third })
             .take(count)
-            .map { it.url }
+            .map { it.first }
 }

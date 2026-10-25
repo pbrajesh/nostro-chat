@@ -23,16 +23,30 @@ secp256k1 key pair that lives on the phone.
   even before you add them.
 - **Discoverability:** on unlock the app publishes your username (kind 0) and the relays
   you read messages from (kind 10050).
-
-- **Saved messages:** messages are stored in a SQLCipher (AES-256) database on the phone.
-  Its key is derived from your private key, which only the PIN unlocks, so the database
-  can't be read without the PIN.
+- **Relays:** the four relays above are your inbox and the built-in fallback. Once a day
+  the app also reads NIP-66 relay monitor reports and connects to the six fastest free,
+  open relays it finds (the choice is remembered between launches). Before sending, it
+  looks up the recipient's own inbox relays (their kind 10050) and delivers there too.
+- **Saved messages:** every message that arrives from a relay, and every message you send,
+  is written to a SQLCipher (AES-256) database on the phone, and the screens read
+  messages only from that database. Its key is derived from your private key, which only
+  the PIN unlocks, so the database can't be read without the PIN.
 - **Auto-delete:** Settings → "Delete messages after" 1 day, 10 days, or never (default).
   Expired messages are removed when you unlock and every 10 minutes while the app is open,
   and ignored if a relay sends them again.
 
-The app only sends to its own four relays; it doesn't yet look up a contact's
-preferred relays.
+## Nostr standards (NIPs) used
+
+| NIP | What the app uses it for |
+| --- | --- |
+| [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md) | Events, ids, Schnorr signatures, the relay protocol (`REQ`, `EVENT`, `EOSE`, `OK`, `CLOSE`), and the kind 0 profile with your username |
+| [NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md) | Private direct messages (kind 14) and inbox relay lists (kind 10050) |
+| [NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md) | `npub` encoding of public keys |
+| [NIP-21](https://github.com/nostr-protocol/nips/blob/master/21.md) | `nostr:` URIs in the QR code |
+| [NIP-42](https://github.com/nostr-protocol/nips/blob/master/42.md) | Answering relay `AUTH` challenges, so relays that guard gift wraps will hand them over |
+| [NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md) | Version 2 encryption of seals and gift wraps (checked against the official test vectors) |
+| [NIP-59](https://github.com/nostr-protocol/nips/blob/master/59.md) | Seals (kind 13) and gift wraps (kind 1059) that hide the sender and timing |
+| [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) | Relay discovery from monitor reports (kind 30166) |
 
 ### About the PIN
 

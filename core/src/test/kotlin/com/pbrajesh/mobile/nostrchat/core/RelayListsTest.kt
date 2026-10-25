@@ -42,17 +42,21 @@ class RelayListsTest {
         assertNull(Nip66.parse(report("ws://insecure.example")))
     }
 
-    @Test fun picksFastestFreshRelays() {
+    @Test fun picksRelaysMostMonitorsVouchFor() {
+        fun r(url: String, rtt: Int?, monitor: String, at: Long = now) = Nip66.RelayReport(url, rtt, at, monitor)
         val reports = listOf(
-            Nip66.RelayReport("wss://slow.example", 900, now),
-            Nip66.RelayReport("wss://fast.example", 50, now),
-            Nip66.RelayReport("wss://fast.example", 2000, now - 100), // older report of the same relay
-            Nip66.RelayReport("wss://unknown.example", null, now),
-            Nip66.RelayReport("wss://stale.example", 10, now - Nip66.MAX_AGE_SECONDS - 1),
-            Nip66.RelayReport("wss://default.example", 5, now),
+            r("wss://popular.example", 300, "m1"), r("wss://popular.example", 200, "m2"), r("wss://popular.example", 250, "m3"),
+            r("wss://popular.example", 5000, "m1", at = now - 100), // older report from m1 is ignored
+            r("wss://tiny.example", 5, "m1"),
+            r("wss://pair-fast.example", 100, "m1"), r("wss://pair-fast.example", 120, "m2"),
+            r("wss://pair-slow.example", 900, "m1"), r("wss://pair-slow.example", null, "m2"),
+            r("wss://stale.example", 1, "m1", at = now - Nip66.MAX_AGE_SECONDS - 1),
+            r("wss://stale.example", 1, "m2", at = now - Nip66.MAX_AGE_SECONDS - 1),
+            r("wss://stale.example", 1, "m3", at = now - Nip66.MAX_AGE_SECONDS - 1),
+            r("wss://default.example", 1, "m1"), r("wss://default.example", 1, "m2"), r("wss://default.example", 1, "m3"),
         )
         assertEquals(
-            listOf("wss://fast.example", "wss://slow.example", "wss://unknown.example"),
+            listOf("wss://popular.example", "wss://pair-fast.example", "wss://pair-slow.example"),
             Nip66.pick(reports, now, exclude = setOf("wss://default.example"), count = 3),
         )
     }

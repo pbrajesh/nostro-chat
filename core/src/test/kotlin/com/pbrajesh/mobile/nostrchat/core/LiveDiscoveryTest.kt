@@ -30,6 +30,8 @@ class LiveDiscoveryTest {
         pool.stop()
         reports.forEach { (relay, list) -> println("reports from $relay: ${list.size}") }
         val picked = Nip66.pick(reports.values.flatten(), now, exclude = RelayPool.DEFAULT_RELAYS.toSet())
+        val all = reports.values.flatten()
+        println("monitors: ${all.map { it.monitor }.distinct().size}, relays reported: ${all.map { it.url }.distinct().size}")
         println("picked: $picked")
         assertTrue(picked.isNotEmpty())
     }
