@@ -64,6 +64,10 @@ Every push runs the **Build APK** GitHub Actions workflow. Open the repository's
 from that app). The debug signing key is committed in `app/debug.keystore` so each new
 build installs over the previous one without wiping your keys.
 
+## To-do
+
+Planned work, including key backup and the Play Store release, is in [TODO.md](TODO.md).
+
 ## Layout
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for diagrams.
