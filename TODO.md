@@ -2,19 +2,11 @@
 
 ## Key backup and restore (moving to a new phone)
 
-Today the private key is locked to the phone's Keystore, so a new phone or a reinstall
-means a new identity.
-
-- [ ] **Export:** in Settings, show the private key as a NIP-49 `ncryptsec` (scrypt +
-      XChaCha20-Poly1305, encrypted with a backup password the user chooses, separate
-      from the 4-character PIN), as a QR code and as copyable text. Ask for the PIN first.
-- [ ] **Import at first setup:** next to "Create my keys", add "Restore from backup":
-      scan or paste the `ncryptsec`, enter the backup password, then choose a PIN for this
-      phone. The key is then stored the same way as a new one (scrypt(PIN) + AES-GCM +
-      Keystore).
-- [ ] Tests against the NIP-49 test vectors in `core/`.
-- [ ] Contacts and settings are not part of the key; decide whether to include them in
-      the backup or let contacts come back from relays.
+- [x] **Full backup file:** Settings → "Back up to a file" saves the key, messages,
+      contacts and settings, encrypted with a backup password; "Restore from a backup
+      file" at first setup brings them back on the new phone.
+- [ ] **Key-only export:** show the private key as a NIP-49 `ncryptsec` (QR and text) so
+      it can be moved into other Nostr apps, and accept one at restore.
 
 ## Play Store release
 

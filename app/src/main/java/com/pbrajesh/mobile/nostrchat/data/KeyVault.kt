@@ -34,8 +34,17 @@ class KeyVault(context: Context) {
     fun storedPublicKey(): ByteArray? = prefs.getString(KEY_PUB, null)?.hexToBytes()
 
     /** Slow (scrypt); call off the main thread. */
-    fun create(pin: CharArray): Identity {
-        val priv = NostrKeys.generatePrivateKey()
+    fun create(pin: CharArray): Identity = store(NostrKeys.generatePrivateKey(), pin)
+
+    /** Stores a key brought from another phone, under this phone's PIN and Keystore. Slow (scrypt). */
+    fun restore(privateKey: ByteArray, pin: CharArray): Identity = store(privateKey.copyOf(), pin)
+
+    /** Checks the PIN without unlocking anything new; wrong guesses count towards the lockout. */
+    fun verifyPin(pin: CharArray): UnlockResult = unlock(pin).also {
+        if (it is UnlockResult.Success) it.identity.privateKey.fill(0)
+    }
+
+    private fun store(priv: ByteArray, pin: CharArray): Identity {
         val pub = NostrKeys.publicKey(priv)
         val sealed = PinCrypto.seal(priv, pin).toBytes()
         val wrapped = KeystoreWrapper.wrap(sealed)

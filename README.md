@@ -34,6 +34,14 @@ secp256k1 key pair that lives on the phone.
 - **Auto-delete:** Settings → "Delete messages after" 1 day, 10 days, or never (default).
   Expired messages are removed when you unlock and every 10 minutes while the app is open,
   and ignored if a relay sends them again.
+- **Moving to a new phone:** Settings → "Back up to a file" asks for your PIN and a
+  backup password (8+ characters, separate from the PIN), then saves one `.ncbak` file
+  with your private key, messages, contacts and the auto-delete setting. The file is
+  gzip'd JSON encrypted with AES-256-GCM under scrypt(password) (N=2^16, r=8, p=1), so it
+  is not tied to the old phone's Keystore. Copy it to the new phone any way you like, tap
+  "Restore from a backup file" at first setup, enter the backup password and choose a PIN
+  for the new phone. Copying the app's own files doesn't work, because the Keystore key
+  that wraps your private key can't leave the old phone.
 
 ## Nostr standards (NIPs) used
 
@@ -53,8 +61,9 @@ secp256k1 key pair that lives on the phone.
 A 4-character PIN has about 14.8 million combinations, which a determined attacker can
 brute-force if they get the encrypted data off the device. The Keystore layer is what
 stops that: the guesses have to run on your phone, through the app. Treat the PIN as a
-screen lock, not as strong encryption. There is no key backup yet, so uninstalling the app
-or clearing its data deletes your identity.
+screen lock, not as strong encryption. Uninstalling the app or clearing its data deletes
+your identity unless you have a backup file. A backup file has no Keystore layer, so its
+strength is the backup password's: anyone with the file can guess passwords offline.
 
 ## Getting the APK without Android Studio
 
@@ -66,7 +75,7 @@ build installs over the previous one without wiping your keys.
 
 ## To-do
 
-Planned work, including key backup and the Play Store release, is in [TODO.md](TODO.md).
+Planned work, including the Play Store release, is in [TODO.md](TODO.md).
 
 ## Layout
 

@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -81,10 +82,13 @@ fun HomeScreen(
     onRetentionChange: (Retention) -> Unit,
     onAddContact: (key: String, name: String) -> String?,
     onRemoveContact: (Contact) -> Unit,
+    onPrepareBackup: (pin: String, password: String, onResult: (String?) -> Unit) -> Unit,
+    onSaveBackup: (file: Uri?, onResult: (String?) -> Unit) -> Unit,
     onLock: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(0) }
     var adding by rememberSaveable { mutableStateOf(false) }
+    var backingUp by rememberSaveable { mutableStateOf(false) }
     var openChat by rememberSaveable { mutableStateOf<String?>(null) }
     val conversations by messenger.conversations.collectAsStateWithLifecycle()
     val pending by messenger.pending.collectAsStateWithLifecycle()
@@ -133,7 +137,7 @@ fun HomeScreen(
             when (tab) {
                 0 -> ChatsTab(contacts, conversations, status, onOpen = { openChat = it })
                 1 -> ProfileTab(identity)
-                else -> SettingsTab(retention, onRetentionChange)
+                else -> SettingsTab(retention, onRetentionChange, onBackup = { backingUp = true })
             }
         }
     }
@@ -141,10 +145,13 @@ fun HomeScreen(
     if (adding) {
         AddContactDialog(onAdd = onAddContact, onDismiss = { adding = false })
     }
+    if (backingUp) {
+        ExportBackupDialog(onPrepare = onPrepareBackup, onSave = onSaveBackup, onDismiss = { backingUp = false })
+    }
 }
 
 @Composable
-private fun SettingsTab(retention: Retention, onChange: (Retention) -> Unit) {
+private fun SettingsTab(retention: Retention, onChange: (Retention) -> Unit, onBackup: () -> Unit) {
     Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
         Text(
             "Delete messages after",
@@ -172,6 +179,22 @@ private fun SettingsTab(retention: Retention, onChange: (Retention) -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(16.dp),
         )
+        HorizontalDivider()
+        Text(
+            "Move to a new phone",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        Text(
+            "Your key is locked to this phone's secure hardware, so copying the app's files " +
+                "won't work on another phone. Instead, save a backup file protected by a " +
+                "password, copy it to the new phone, and choose \"Restore from a backup file\" " +
+                "when you set the app up there.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+        OutlinedButton(onClick = onBackup, modifier = Modifier.padding(16.dp)) { Text("Back up to a file") }
     }
 }
 

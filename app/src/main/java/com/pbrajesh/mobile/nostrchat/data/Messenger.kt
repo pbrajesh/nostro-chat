@@ -126,6 +126,9 @@ class Messenger(
         pool.subscribe("contact-inboxes", """{"kinds":[${Nip17.KIND_DM_RELAYS}],"authors":[$authors]}""")
     }
 
+    /** Every stored message, for a backup file. */
+    fun allMessages(): List<DirectMessage> = store.all()
+
     /** Applies the retention setting to the database. */
     fun prune() {
         val cutoff = retention().cutoff(now()) ?: return

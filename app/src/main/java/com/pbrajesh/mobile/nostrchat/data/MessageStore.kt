@@ -35,6 +35,17 @@ class MessageStore private constructor(private val db: SQLiteDatabase) : Closeab
         return db.insertWithOnConflict("messages", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1L
     }
 
+    /** Inserts many messages in one transaction, e.g. when restoring a backup. */
+    fun insertAll(messages: List<DirectMessage>) {
+        db.beginTransaction()
+        try {
+            messages.forEach(::insert)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
     /** Deletes messages created before [cutoff] (Unix seconds). */
     fun deleteOlderThan(cutoff: Long): Int = db.delete("messages", "created_at < ?", arrayOf(cutoff.toString()))
 

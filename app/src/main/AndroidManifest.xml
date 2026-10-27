@@ -5,7 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- The encrypted key is bound to this phone's Keystore, so a cloud backup
-         could never be decrypted on another device. Keep it out of backups. -->
+         could never be decrypted on another device. Keep it out of backups; the app's
+         own password-protected backup file is how users move phones. -->
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"

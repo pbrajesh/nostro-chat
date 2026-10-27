@@ -1,9 +1,14 @@
 package com.pbrajesh.mobile.nostrchat
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.pbrajesh.mobile.nostrchat.core.Backup
+import com.pbrajesh.mobile.nostrchat.core.BackupContents
+import com.pbrajesh.mobile.nostrchat.core.InvalidBackupException
 import com.pbrajesh.mobile.nostrchat.core.NostrKeys
+import com.pbrajesh.mobile.nostrchat.core.WrongBackupPasswordException
 import com.pbrajesh.mobile.nostrchat.core.LocalKeys
 import com.pbrajesh.mobile.nostrchat.core.Pin
 import com.pbrajesh.mobile.nostrchat.core.Retention
@@ -30,6 +35,8 @@ import kotlinx.coroutines.withContext
 sealed interface Screen {
     data object Setup : Screen
     data object Unlock : Screen
+    /** Restoring from a backup file the user picked at first setup. */
+    data class Restore(val file: Uri) : Screen
     data class Home(val identity: Identity, val messenger: Messenger) : Screen
 }
 
@@ -46,6 +53,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val settings = Settings(app)
     private val relayDirectory = RelayDirectory(app)
     private var pruneJob: Job? = null
+    /** An encrypted backup waiting for the user to pick where to save it. */
+    private var pendingBackup: ByteArray? = null
 
     private val _retention = MutableStateFlow(settings.retention)
     val retention: StateFlow<Retention> = _retention.asStateFlow()
@@ -78,6 +87,98 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     fail("Too many wrong PINs. Try again in $seconds seconds.")
                 }
             }
+        }
+    }
+
+    fun startRestore(file: Uri) {
+        _state.value = UiState(screen = Screen.Restore(file))
+    }
+
+    fun cancelRestore() {
+        _state.value = UiState(screen = Screen.Setup)
+    }
+
+    fun restore(password: String, pin: String, confirm: String) {
+        val screen = _state.value.screen as? Screen.Restore ?: return
+        when {
+            password.isEmpty() -> return fail("Enter the backup password.")
+            !Pin.isValid(pin) -> return fail("PIN must be exactly 4 letters or digits.")
+            pin != confirm -> return fail("The two PINs don't match.")
+        }
+        runBusy {
+            val app = getApplication<Application>()
+            val contents = try {
+                withContext(Dispatchers.IO) {
+                    val bytes = app.contentResolver.openInputStream(screen.file)?.use { it.readBytes() }
+                        ?: throw InvalidBackupException("Couldn't open that file.")
+                    withContext(Dispatchers.Default) { Backup.decrypt(bytes, password.toCharArray()) }
+                }
+            } catch (e: WrongBackupPasswordException) {
+                return@runBusy fail("Wrong backup password.")
+            } catch (e: InvalidBackupException) {
+                return@runBusy fail(e.message)
+            }
+            // Messages, contacts and settings first: the identity is only saved once they
+            // are in place, so a failure here leaves the phone at first setup.
+            withContext(Dispatchers.IO) {
+                app.deleteDatabase("messages.db")
+                MessageStore.open(app, LocalKeys.databaseKey(contents.privateKey)).use { it.insertAll(contents.messages) }
+            }
+            contactStore.replaceAll(contents.contacts.map { (pub, name) -> Contact(pub, name) })
+            contents.retention?.let {
+                settings.retention = Retention.fromName(it)
+                _retention.value = settings.retention
+            }
+            val identity = withContext(Dispatchers.Default) { vault.restore(contents.privateKey, pin.toCharArray()) }
+            contents.privateKey.fill(0)
+            enterHome(identity)
+        }
+    }
+
+    /**
+     * Checks the PIN and encrypts a backup with [password]. [onResult] gets null when the
+     * backup is ready to save with [saveBackup], or an error message.
+     */
+    fun prepareBackup(pin: String, password: String, onResult: (String?) -> Unit) {
+        val home = _state.value.screen as? Screen.Home ?: return
+        viewModelScope.launch {
+            val error = try {
+                when (val check = withContext(Dispatchers.Default) { vault.verifyPin(pin.toCharArray()) }) {
+                    is UnlockResult.WrongPin -> "Wrong PIN. ${check.attemptsBeforeLockout} more tries before a wait."
+                    is UnlockResult.LockedOut -> "Too many wrong PINs. Try again later."
+                    is UnlockResult.Success -> {
+                        val contents = BackupContents(
+                            privateKey = home.identity.privateKey,
+                            contacts = contactStore.all().map { it.publicKeyHex to it.name },
+                            messages = withContext(Dispatchers.IO) { home.messenger.allMessages() },
+                            retention = settings.retention.name,
+                        )
+                        pendingBackup = withContext(Dispatchers.Default) { Backup.encrypt(contents, password.toCharArray()) }
+                        null
+                    }
+                }
+            } catch (e: Exception) {
+                "Couldn't create the backup: ${e.message}"
+            }
+            onResult(error)
+        }
+    }
+
+    /** Writes the prepared backup to [file]. [onResult] gets null on success, or an error message. */
+    fun saveBackup(file: Uri?, onResult: (String?) -> Unit) {
+        val bytes = pendingBackup ?: return
+        pendingBackup = null
+        if (file == null) return onResult("Backup not saved.")
+        viewModelScope.launch {
+            val error = try {
+                withContext(Dispatchers.IO) {
+                    getApplication<Application>().contentResolver.openOutputStream(file, "wt")!!.use { it.write(bytes) }
+                }
+                null
+            } catch (e: Exception) {
+                "Couldn't save the backup: ${e.message}"
+            }
+            onResult(error)
         }
     }
 
@@ -148,7 +249,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun fail(message: String) = _state.update { it.copy(busy = false, error = message) }
+    private fun fail(message: String?) = _state.update { it.copy(busy = false, error = message) }
 
     private fun runBusy(block: suspend () -> Unit) {
         _state.update { it.copy(busy = true, error = null) }
