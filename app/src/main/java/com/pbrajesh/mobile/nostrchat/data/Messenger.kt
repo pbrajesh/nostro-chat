@@ -50,7 +50,8 @@ class Messenger(
     private val scope = CoroutineScope(parentScope.coroutineContext + job + Dispatchers.IO)
 
     private val myHex = identity.publicKey.toHex()
-    private val inboxRelays = RelayPool.DEFAULT_RELAYS
+    /** Where we read our messages: published as kind 10050 and put in the profile QR code. */
+    val inboxRelays = RelayPool.DEFAULT_RELAYS
 
     private val _conversations = MutableStateFlow<Map<String, List<DirectMessage>>>(emptyMap())
     /** Peer public key (hex) -> messages, oldest first. Read from the database only. */

@@ -136,7 +136,7 @@ fun HomeScreen(
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (tab) {
                 0 -> ChatsTab(contacts, conversations, status, onOpen = { openChat = it })
-                1 -> ProfileTab(identity)
+                1 -> ProfileTab(identity, messenger.inboxRelays)
                 else -> SettingsTab(retention, onRetentionChange, onBackup = { backingUp = true })
             }
         }
@@ -199,7 +199,7 @@ private fun SettingsTab(retention: Retention, onChange: (Retention) -> Unit, onB
 }
 
 @Composable
-private fun ProfileTab(identity: Identity) {
+private fun ProfileTab(identity: Identity, inboxRelays: List<String>) {
     val context = LocalContext.current
     val npub = identity.npub
     Column(
@@ -212,7 +212,8 @@ private fun ProfileTab(identity: Identity) {
         Box(
             Modifier.background(Color.White, RoundedCornerShape(12.dp)).padding(12.dp),
         ) {
-            QrCode(NostrKeys.nostrUri(identity.publicKey), Modifier.size(260.dp))
+            // nprofile: the key plus our inbox relays, so the scanner knows where to reach us.
+            QrCode(NostrKeys.nostrUri(identity.publicKey, inboxRelays), Modifier.size(260.dp))
         }
         Text("Scan to add me", style = MaterialTheme.typography.bodyMedium)
         Text(
