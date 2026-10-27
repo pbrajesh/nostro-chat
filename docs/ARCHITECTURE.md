@@ -86,6 +86,12 @@ The private key exists only in memory after a correct PIN. The message database 
 derived from it, so the database can't be opened without the PIN either. Five wrong PINs
 start a lockout that doubles each time, up to an hour.
 
+The Keystore key can't be exported, so a copy of these files is useless on another
+phone. To move phones, the app writes a backup file instead (`core/Backup.kt`):
+`"NCBK" | version | scrypt params | salt | IV | AES-256-GCM(gzip(JSON))`, keyed with
+scrypt (N=2^16, r=8) of a backup password. Restoring re-wraps the key under the new
+phone's PIN and Keystore and re-inserts the messages into a fresh `messages.db`.
+
 ## How a message travels (NIP-17)
 
 ```mermaid

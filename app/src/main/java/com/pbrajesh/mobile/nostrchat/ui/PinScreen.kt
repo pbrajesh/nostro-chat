@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +37,8 @@ fun PinScreen(
     error: String?,
     onSubmit: (pin: String, confirm: String) -> Unit,
     onEdit: () -> Unit,
+    /** Shown at first setup: restore an identity from a backup file instead of creating one. */
+    onRestore: (() -> Unit)? = null,
 ) {
     var pin by rememberSaveable { mutableStateOf("") }
     var confirm by rememberSaveable { mutableStateOf("") }
@@ -78,6 +81,9 @@ fun PinScreen(
             } else {
                 Button(onClick = submit, enabled = canSubmit, modifier = Modifier.fillMaxWidth()) {
                     Text(if (creating) "Create my keys" else "Unlock")
+                }
+                if (onRestore != null) {
+                    TextButton(onClick = onRestore) { Text("Restore from a backup file") }
                 }
             }
         }

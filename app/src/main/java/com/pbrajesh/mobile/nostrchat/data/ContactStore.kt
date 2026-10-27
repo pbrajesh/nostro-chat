@@ -33,6 +33,8 @@ class ContactStore(context: Context) {
 
     fun remove(publicKeyHex: String) = save(all().filterNot { it.publicKeyHex == publicKeyHex })
 
+    fun replaceAll(contacts: List<Contact>) = save(contacts)
+
     private fun save(contacts: List<Contact>) {
         val json = JSONArray()
         contacts.forEach { json.put(JSONObject().put("pubkey", it.publicKeyHex).put("name", it.name)) }
