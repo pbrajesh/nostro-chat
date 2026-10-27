@@ -12,6 +12,7 @@ import com.pbrajesh.mobile.nostrchat.core.WrongBackupPasswordException
 import com.pbrajesh.mobile.nostrchat.core.LocalKeys
 import com.pbrajesh.mobile.nostrchat.core.Pin
 import com.pbrajesh.mobile.nostrchat.core.Retention
+import com.pbrajesh.mobile.nostrchat.core.toHex
 import com.pbrajesh.mobile.nostrchat.data.Contact
 import com.pbrajesh.mobile.nostrchat.data.ContactStore
 import com.pbrajesh.mobile.nostrchat.data.Identity
@@ -210,10 +211,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Returns an error message, or null when the contact was added. */
     fun addContact(keyText: String, name: String): String? {
-        val key = NostrKeys.parsePublicKey(keyText) ?: return "That isn't a valid npub."
+        val profile = NostrKeys.parseProfile(keyText) ?: return "That isn't a valid npub."
+        val key = profile.publicKey
         val me = (_state.value.screen as? Screen.Home)?.identity
         if (me != null && key.contentEquals(me.publicKey)) return "That's your own key."
         contactStore.add(key, name)
+        // Relay hints from an nprofile, until their own inbox list (kind 10050) arrives.
+        if (profile.relays.isNotEmpty()) relayDirectory.saveInbox(key.toHex(), profile.relays, createdAt = 0)
         _state.update { it.copy(contacts = contactStore.all()) }
         (_state.value.screen as? Screen.Home)?.messenger?.refreshContacts()
         return null

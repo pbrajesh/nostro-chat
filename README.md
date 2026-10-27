@@ -13,9 +13,11 @@ secp256k1 key pair that lives on the phone.
   (30 seconds, doubling, up to an hour).
 - **Username:** a friendly `adjective_animal` name (e.g. `roaring_lion`) derived from the
   public key, so anyone who has your npub sees the same name.
-- **Profile:** your npub as text and as a QR code (`nostr:npub1…`, NIP-21), with copy and
-  share buttons.
-- **Contacts:** add by scanning a QR code or pasting an npub (or 64-char hex).
+- **Profile:** your npub as text, and a QR code holding your public key plus your inbox
+  relays (`nostr:nprofile1…`, NIP-19/NIP-21), with copy and share buttons.
+- **Contacts:** add by scanning a QR code or pasting an npub, nprofile (or 64-char hex).
+  Relays in a scanned nprofile are used to reach that contact until their own inbox
+  relay list arrives.
 - **Chat:** tap a contact to open a conversation. Messages are NIP-17 private direct
   messages (NIP-44 encryption inside NIP-59 gift wraps), sent through public relays
   (`relay.damus.io`, `nos.lol`, `relay.primal.net`, `relay.0xchat.com`). They work with
@@ -49,7 +51,7 @@ secp256k1 key pair that lives on the phone.
 | --- | --- |
 | [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md) | Events, ids, Schnorr signatures, the relay protocol (`REQ`, `EVENT`, `EOSE`, `OK`, `CLOSE`), and the kind 0 profile with your username |
 | [NIP-17](https://github.com/nostr-protocol/nips/blob/master/17.md) | Private direct messages (kind 14) and inbox relay lists (kind 10050) |
-| [NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md) | `npub` encoding of public keys |
+| [NIP-19](https://github.com/nostr-protocol/nips/blob/master/19.md) | `npub` encoding of public keys, and `nprofile` (key plus relay hints) in the QR code |
 | [NIP-21](https://github.com/nostr-protocol/nips/blob/master/21.md) | `nostr:` URIs in the QR code |
 | [NIP-42](https://github.com/nostr-protocol/nips/blob/master/42.md) | Answering relay `AUTH` challenges, so relays that guard gift wraps will hand them over |
 | [NIP-44](https://github.com/nostr-protocol/nips/blob/master/44.md) | Version 2 encryption of seals and gift wraps (checked against the official test vectors) |

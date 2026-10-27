@@ -46,6 +46,39 @@ class CoreTest {
         assertContentEquals(pub, NostrKeys.parsePublicKey(NostrKeys.nostrUri(pub)))
     }
 
+    // Test vector from NIP-19.
+    private val vectorNprofile = "nprofile1qqsrhuxx8l9ex335q7he0f09aej04zpazpl0ne2cgukyawd24mayt8gpp4mhxue69uhhytnc9e3k7mgpz4mhxue69uhkg6nzv9ejuumpv34kytnrdaksjlyr9p"
+
+    @Test fun nprofileMatchesNip19Vector() {
+        val relays = listOf("wss://r.x.com", "wss://djbas.sadkb.com")
+        assertEquals(vectorNprofile, NostrKeys.nprofile(vectorHex.hexToBytes(), relays))
+        val parsed = NostrKeys.parseProfile("nostr:$vectorNprofile")!!
+        assertContentEquals(vectorHex.hexToBytes(), parsed.publicKey)
+        assertEquals(relays, parsed.relays)
+        assertContentEquals(vectorHex.hexToBytes(), NostrKeys.parsePublicKey(vectorNprofile))
+    }
+
+    @Test fun qrUriCarriesRelays() {
+        val pub = NostrKeys.publicKey(NostrKeys.generatePrivateKey())
+        val uri = NostrKeys.nostrUri(pub, RelayPool.DEFAULT_RELAYS)
+        assertTrue(uri.startsWith("nostr:nprofile1"))
+        val parsed = NostrKeys.parseProfile(uri)!!
+        assertContentEquals(pub, parsed.publicKey)
+        assertEquals(RelayPool.DEFAULT_RELAYS, parsed.relays)
+        assertEquals(0, NostrKeys.parseProfile(NostrKeys.npub(pub))!!.relays.size)
+    }
+
+    @Test fun nprofileDropsBadRelaysAndRejectsMissingKey() {
+        val pub = vectorHex.hexToBytes()
+        val parsed = NostrKeys.parseProfile(NostrKeys.nprofile(pub, listOf("http://plain.example", "WSS://Relay.Example/")))!!
+        assertEquals(listOf("wss://relay.example"), parsed.relays)
+        // Only a relay TLV, no public key.
+        val noKey = Bech32.encode("nprofile", byteArrayOf(1, 3) + "wss".toByteArray())
+        assertNull(NostrKeys.parseProfile(noKey))
+        // Truncated key TLV.
+        assertNull(NostrKeys.parseProfile(Bech32.encode("nprofile", byteArrayOf(0, 32) + pub.copyOf(10))))
+    }
+
     @Test fun pinValidation() {
         assertTrue(Pin.isValid("a1B2"))
         assertFalse(Pin.isValid("abc"))
